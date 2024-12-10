@@ -17,18 +17,34 @@ package main
 import (
 	"context"
 	"flag"
-	"os"
-
+	"fmt"
 	"github.com/drone/go-convert/command"
-
 	"github.com/google/subcommands"
+	"net/http"
 )
 
+func runBinaryHandler(w http.ResponseWriter, r *http.Request) {
+	// Parse the query parameters for two string inputs
+	query := r.URL.Query()
+	param1 := query.Get("input1")
+	param2 := query.Get("input2")
+
+	if param1 == "" || param2 == "" {
+		http.Error(w, "Both input1 and input2 are required", http.StatusBadRequest)
+		return
+	}
+	flag.Parse()
+	ctx := context.Background()
+
+	var output []byte
+	output = new(command.Drone).ExecuteCommand(ctx, param2)
+
+	// Send the output back to the client
+	w.WriteHeader(http.StatusOK)
+	w.Write(output)
+}
+
 func main() {
-	subcommands.Register(new(command.Azure), "")
-	subcommands.Register(new(command.Bitbucket), "")
-	subcommands.Register(new(command.Circle), "")
-	subcommands.Register(new(command.Cloudbuild), "")
 	subcommands.Register(new(command.Drone), "")
 	subcommands.Register(new(command.Github), "")
 	subcommands.Register(new(command.Gitlab), "")
@@ -38,7 +54,11 @@ func main() {
 	subcommands.Register(new(command.JenkinsJson), "")
 	subcommands.Register(new(command.JenkinsXml), "")
 
-	flag.Parse()
-	ctx := context.Background()
-	os.Exit(int(subcommands.Execute(ctx)))
+	http.HandleFunc("/run", runBinaryHandler)
+
+	// Start the server
+	fmt.Println("Server starting on :8990...")
+	if err := http.ListenAndServe(":8990", nil); err != nil {
+		fmt.Println("Error starting server:", err)
+	}
 }
