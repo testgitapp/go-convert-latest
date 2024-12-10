@@ -66,6 +66,41 @@ func (c *Drone) SetFlags(f *flag.FlagSet) {
 	f.StringVar(&c.orgSecrets, "org-secrets", "", "organization secrets, comma separated")
 }
 
+func ConvertStringToBytes(input string) []byte {
+	return []byte(input)
+}
+
+func (c *Drone) ExecuteCommand(_ context.Context, input string) []byte {
+	converter := drone.New(
+		drone.WithDockerhub(c.dockerConn),
+		drone.WithKubernetes(c.kubeName, c.kubeConn),
+	)
+	after, err := converter.ConvertString(input)
+	if err != nil {
+		log.Println(err)
+	}
+
+	// downgrade from the v1 harness yaml format
+	// to the v0 harness yaml format.
+	if c.downgrade {
+		// downgrade to the v0 yaml
+		d := downgrader.New(
+			downgrader.WithCodebase(c.repoName, c.repoConn),
+			downgrader.WithDockerhub(c.dockerConn),
+			downgrader.WithKubernetes(c.kubeName, c.kubeConn),
+			downgrader.WithName(c.name),
+			downgrader.WithOrganization(c.org),
+			downgrader.WithProject(c.proj),
+		)
+		after, err = d.Downgrade(after)
+		if err != nil {
+			log.Println(err)
+		}
+	}
+
+	return after
+}
+
 func (c *Drone) Execute(_ context.Context, f *flag.FlagSet, _ ...interface{}) subcommands.ExitStatus {
 	path := f.Arg(0)
 
